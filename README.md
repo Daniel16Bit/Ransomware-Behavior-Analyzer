@@ -1,4 +1,4 @@
-# 🔴 RANSOMWARE BEHAVIOR ANALYZER v2.0
+# 🦟 RANSOMWARE BEHAVIOR ANALYZER v2.0
 ## Linux-only | Python + C | ASCII Terminal UI
 
 ```
