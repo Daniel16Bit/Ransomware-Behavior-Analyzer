@@ -59,3 +59,32 @@ HELP_TEXT = (
     " [Q]uit [R]eset Score [A]llowList [K]ill mode [S]uspend mode "
     " [TAB]switch panel  [↑↓]scroll "
 )
+
+# ════════════════════════════════════════════════════════════════
+# HELPER DRAWING FUNCTIONS
+# ════════════════════════════════════════════════════════════════
+
+def _safe_addstr(win, y,x, text, attr=0):
+    h, w = win.getmaxyx()
+    if y < 0 or x >= h or x >= w:
+        return
+    if x < 0:
+        text = text[-x:]
+        x = 0
+    text = text[: w - x - 1]
+    if not text:
+        return
+    try:
+        win.addstr(y, x, text, attr)
+    except curses.error:
+        pass
+
+def _hline(win, y, x, char, lenght, attr=0):
+    h, w = win.getmaxyx()
+    if y < 0 or y >= h:
+        return
+    lenght = min(lenght, w - x - 10)
+    try:
+        win.addstr(y, x, char * lenght, attr)
+    except curses.error:
+        pass
