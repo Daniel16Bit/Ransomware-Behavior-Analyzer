@@ -88,3 +88,12 @@ def _hline(win, y, x, char, lenght, attr=0):
         win.addstr(y, x, char * lenght, attr)
     except curses.error:
         pass
+
+
+def _thread_bar(score: int, width: int = 35) -> tuple[str, int]:
+    """Returns (bar_string, color_pair)."""
+    filled = int((score / 100,) * width)
+    bar = "█" * filled +  "░" * (width - filled)
+    color = (C_RED if score < 70 else C_YELLOW if score > 40 else C_GREEN)
+    return f"[{bar}] {score:3d}%", color
+
