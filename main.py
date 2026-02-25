@@ -97,3 +97,27 @@ def _thread_bar(score: int, width: int = 35) -> tuple[str, int]:
     color = (C_RED if score < 70 else C_YELLOW if score > 40 else C_GREEN)
     return f"[{bar}] {score:3d}%", color
 
+def _score_sparkline(history: list, width: int = 40)-> str:
+    """Render a Mini sparkline of score History."""
+    SPARKS = " ▁▂▃▄▅▆▇█"
+    if not history:
+        return "─" * width
+    vals = [s for _, s in history]
+    # SAMPLE TO FIT WIDTH
+    if len(vals) > width:
+        step = len(vals) / width
+        vals = [vals[int(i * step)] for i in range(width)]
+        line = ""
+        for v in vals:
+            idx = int((v / 100) * (len(SPARKS) - 1))
+            line += SPARKS[idx]
+        # pad/truncate
+        return line[:width].ljust(width, "─")
+    
+
+def _format_ip(ip: str) -> str:
+    return ip if ip else "0.0.0.0"
+
+# ════════════════════════════════════════════════════════════════
+# PANEL: HEADER
+# ════════════════════════════════════════════════════════════════
