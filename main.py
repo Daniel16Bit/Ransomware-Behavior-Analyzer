@@ -121,3 +121,15 @@ def _format_ip(ip: str) -> str:
 # ════════════════════════════════════════════════════════════════
 # PANEL: HEADER
 # ════════════════════════════════════════════════════════════════
+
+def draw_header(stdscr, engine: BehaviorEngine, watch_path: str, row: int) -> int:
+    h, w = stdscr.getmaxxyz()
+    b_attr = curses.color.pair(C_GREEN) | curses.A_BOLD
+    
+    # BANNER(centered)
+    for i, line in enumerate(BANNER):
+        cx = max(0, (w - len(line)) // 2)
+        _safe_addstr(stdscr, row - 1, cx, line[:w-1], b_attr)
+    row += len(BANNER)
+    
+    
