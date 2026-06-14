@@ -1,186 +1,122 @@
-# 🔴 RANSOMWARE BEHAVIOR ANALYZER v2.0
-## Linux-only | Python + C | ASCII Terminal UI
+# Ransomware Behavior Analyzer
 
-```
-██████╗  █████╗ ███╗  ██╗███████╗ ██████╗ ███╗  ███╗
-██╔══██╗██╔══██╗████╗ ██║██╔════╝██╔═══██╗████╗████║
-██████╔╝███████║██╔██╗██║███████╗██║   ██║██╔████╔██║
-██╔══██╗██╔══██║██║╚████║╚════██║██║   ██║██║╚██╔╝██║
-██║  ██║██║  ██║██║ ╚███║███████║╚██████╔╝██║ ╚═╝ ██║
-╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚══╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝
-         [ BEHAVIORAL RANSOMWARE ANALYZER v2.0 ]
-```
+Ferramenta para monitoramento de comportamento suspeito em sistemas Linux, com foco na identificação de atividades compatíveis com ransomware.
 
----
+O projeto combina módulos em Python e C. O Python é utilizado para monitoramento, correlação de eventos e interface de terminal, enquanto o C é responsável por operações que exigem maior desempenho, como cálculo de entropia e leitura de informações do sistema.
 
-## Architecture
+## Estrutura
 
 ```
 ransomware-analyzer/
-├── entropy_calc.c      # C: entropy, inode scan, proc info, tcp reader
-├── entropy_calc.so     # Compiled shared library (gcc)
-├── c_bridge.py         # Python ↔ C ctypes bridge
-├── config.py           # All thresholds and settings
-├── logger.py           # Structured JSONL logger + ring buffer
-├── allowlist.py        # SHA-256 process allowlist manager
-├── proc_monitor.py     # /proc filesystem process attribution
-├── net_monitor.py      # /proc/net/tcp network monitor (no root!)
-├── detector.py         # Behavioral detection engine + auto-response
-├── monitor.py          # inotify file system watcher (watchdog)
-├── main.py             # Curses ASCII UI + orchestration
-├── run.sh              # Build, run, test helper
-└── logs/events.jsonl   # Structured event log (JSONL)
+├── entropy_calc.c
+├── entropy_calc.so
+├── c_bridge.py
+├── config.py
+├── logger.py
+├── allowlist.py
+├── proc_monitor.py
+├── net_monitor.py
+├── detector.py
+├── monitor.py
+├── main.py
+├── run.sh
+└── logs/
 ```
 
----
+## Objetivo
 
-## Quick Start
+Detectar possíveis processos de criptografia em massa por meio da análise de eventos do sistema de arquivos, características dos arquivos modificados, atividade de rede e informações obtidas pelo sistema `/proc`.
 
-```bash
-# Terminal 1 — Run analyzer
-./run.sh run
+A detecção é baseada em comportamento observado e não em assinaturas específicas de malware.
 
-# Terminal 2 — Simulate ransomware behavior
-./run.sh test
-```
+## Funcionalidades
 
----
+### Monitoramento de arquivos
 
-## Features
+Utiliza `inotify` através da biblioteca Watchdog para acompanhar alterações em diretórios monitorados.
 
-### 🔬 Entropy Analysis (C module)
-- Shannon entropy calculated in C for maximum performance
-- Samples up to 512KB per file
-- Byte frequency distribution (256 buckets) for visualization
-- Thresholds: **WARN** ≥ 6.8 bits, **ALERT** ≥ 7.2 bits (max = 8.0)
+Eventos observados:
 
-### 👁 File System Monitor (inotify via watchdog)
-- Real-time via Linux `inotify` syscall
-- Events: `MODIFY`, `CREATE`, `DELETE`, `RENAME/MOVE`
-- Recursive directory watching
+* Criação de arquivos
+* Modificação de arquivos
+* Exclusão de arquivos
+* Renomeação e movimentação
 
-### 🧠 Behavioral Detection Engine
-| Detection          | Trigger                                      | Severity |
-|--------------------|----------------------------------------------|----------|
-| `WRITE_BURST`      | ≥15 writes to same file in 10s               | ALERT    |
-| `RENAME_BURST`     | ≥5 renames in 10s                            | ALERT    |
-| `DELETE_BURST`     | ≥10 deletes in 10s                           | ALERT    |
-| `HIGH_ENTROPY`     | File entropy ≥ 7.2 bits                      | ALERT    |
-| `ENTROPY_WARN`     | File entropy ≥ 6.8 bits                      | WARN     |
-| `RANSOM_EXTENSION` | Known ransomware extension created           | CRITICAL |
-| `RENAME_TO_RANSOM_EXT` | File renamed to ransomware extension   | CRITICAL |
-| `RANSOM_NOTE`      | Ransom note filename pattern detected        | CRITICAL |
-| `DELETE_BURST`     | Mass deletion                                | ALERT    |
-| `NEW_UNIQUE_EXT`   | Many unique new extensions created           | WARN     |
+### Análise de entropia
 
-### 🌐 Network Monitor (/proc/net/tcp — **no root required!**)
-| Detection            | Trigger                              | Severity |
-|----------------------|--------------------------------------|----------|
-| `SUSPICIOUS_PORT`    | Connection to known C2/shell ports   | ALERT    |
-| `EXTERNAL_CONNECT`   | Outbound non-private IP connection   | WARN     |
-| `CONNECTION_BURST`   | ≥5 connections to same IP in 60s     | ALERT    |
+O módulo em C calcula a entropia de arquivos modificados para identificar alterações compatíveis com processos de criptografia.
 
-Suspicious ports include: 4444, 5555, 6666, 7777, 8888, 9001 (Tor), 6667 (IRC), 8443...
+São coletadas:
 
-### 🔍 Process Attribution (/proc filesystem)
-- Maps file events to PIDs via `/proc/<pid>/fd` scanning
-- Reads: comm, exe, state, FD count, RSS memory
-- Detects high FD count (≥100 = suspicious — encryption activity)
-- No ptrace or root required!
+* Entropia Shannon
+* Distribuição de frequência dos bytes
+* Amostras parciais do conteúdo para reduzir impacto de desempenho
 
-### 🔐 SHA-256 Allowlist
-- Hash-based allowlist for trusted processes
-- Pre-seeds with common system tools
-- Auto-skips alerts from allowed PIDs
-- Persistent: stored in `hashes/allowlist.sha256`
+### Monitoramento de processos
 
-### ⚡ Auto-Response (disabled by default)
-- **SIGSTOP** (suspend): When score ≥ 70 and `SUSPEND_ENABLED=True`
-- **SIGKILL** (terminate): When score ≥ 85 and `AUTO_KILL_ENABLED=True`
-- Toggle from UI: `[S]` for suspend, `[K]` for kill
+Obtém informações de processos por meio do sistema `/proc`.
 
----
+Informações utilizadas:
 
-## UI Controls
+* PID
+* Nome do processo
+* Executável associado
+* Quantidade de descritores de arquivo
+* Consumo de memória
 
-| Key   | Action                        |
-|-------|-------------------------------|
-| `Q`   | Quit                          |
-| `R`   | Reset threat score + clear UI |
-| `TAB` | Switch panels                 |
-| `↑↓`  | Scroll event log              |
-| `K`   | Toggle auto-kill mode         |
-| `S`   | Toggle auto-suspend mode      |
-| `A`   | Dump allowlist to log         |
+Quando possível, eventos de arquivos são associados ao processo responsável.
 
-### Panels
-1. **EVENTS** — Real-time event log with severity coloring
-2. **NETWORK** — Active TCP connections (from /proc/net/tcp)
-3. **PROCESSES** — Top processes by file descriptor count
+### Monitoramento de conexões
 
----
+Realiza leitura periódica de `/proc/net/tcp` para identificar conexões ativas.
 
-## Configuration (`config.py`)
+O objetivo é detectar:
 
-```python
-WATCH_PATH              = "/tmp/test_watch"   # Directory to monitor
-ENTROPY_THRESHOLD_ALERT = 7.2                 # Bits (max 8.0)
-BURST_WINDOW_SECONDS    = 10                  # Detection window
-WRITE_BURST_THRESHOLD   = 15                  # Writes/window
-AUTO_KILL_ENABLED       = False               # DANGEROUS — enable carefully
-AUTO_KILL_SCORE         = 85                  # Score trigger for SIGKILL
-```
+* Conexões externas incomuns
+* Grande volume de conexões para um mesmo destino
+* Comunicação com portas frequentemente associadas a malware
 
----
+### Sistema de detecção
 
-## Python/C Split Rationale
+A correlação de eventos considera fatores como:
 
-| Task                         | Language | Why                              |
-|------------------------------|----------|----------------------------------|
-| Shannon entropy calculation  | **C**    | O(n) over file bytes, microseconds |
-| /proc/fd inode scanning      | **C**    | Many readlink() calls, fast loop |
-| Byte frequency distribution  | **C**    | 256-bucket array, tight loop     |
-| TCP connection parsing       | **C**    | sscanf over /proc/net/tcp lines  |
-| Behavioral logic             | Python   | Complex rules, easy to change    |
-| curses UI                    | Python   | High-level terminal control      |
-| inotify orchestration        | Python   | watchdog library                 |
-| SHA-256 allowlist            | Python   | hashlib, sufficient speed        |
+* Grande volume de escrita em curto período
+* Renomeações em massa
+* Exclusões em massa
+* Arquivos com entropia elevada
+* Criação de extensões incomuns
+* Presença de extensões associadas a famílias conhecidas de ransomware
+* Criação de arquivos com características de notas de resgate
 
----
+Cada evento contribui para uma pontuação de risco acumulada.
 
-## Log Format (JSONL)
+### Lista de confiança
+
+Processos legítimos podem ser cadastrados por hash SHA-256 para reduzir falsos positivos.
+
+## Registro de eventos
+
+Todos os eventos são armazenados em formato JSONL para posterior análise.
+
+Exemplo:
 
 ```json
 {
-  "ts":       "2025-01-15T14:32:01.234567+00:00",
-  "severity": "CRITICAL",
-  "event":    "RANSOM_EXTENSION",
-  "file":     "/tmp/test_watch/document.locked",
-  "details":  {"extension": ".locked"},
-  "pid":      12345,
-  "proc":     {"comm": "python3", "exe": "/usr/bin/python3", "fd_count": 23}
+  "ts": "2025-01-15T14:32:01",
+  "severity": "ALERT",
+  "event": "HIGH_ENTROPY",
+  "file": "/tmp/test/document.txt"
 }
 ```
 
----
+## Requisitos
 
-## Requirements
+* Linux
+* Python 3.10+
+* GCC
+* watchdog
+* psutil (opcional)
 
-- **OS**: Linux (kernel ≥ 3.5 for inotify_init1, /proc/net/tcp)
-- **GCC**: any modern version
-- **Python**: 3.10+
-- **pip**: `watchdog` (psutil optional for enhanced proc panel)
+## Considerações
 
-```bash
-pip install watchdog psutil
-gcc -O2 -shared -fPIC -o entropy_calc.so entropy_calc.c -lm
-```
-
----
-
-## Known Ransomware Extensions Detected (100+)
-
-`.locked`, `.crypto`, `.enc`, `.encrypted`, `.ryuk`, `.conti`, `.lockbit`,
-`.blackcat`, `.alphv`, `.hive`, `.darkside`, `.revil`, `.maze`, `.dharma`,
-`.phobos`, `.stop`, `.djvu`, `.cerber`, `.wannacry`, `.wcry`, `.petya`,
-`.notpetya`, `.zepto`, `.wallet`, `.gandcrab`, `.snake`, `.ekans`, and more...
+A ferramenta foi desenvolvida para fins educacionais e de pesquisa em segurança ofensiva e defensiva. O foco principal é a identificação de padrões comportamentais normalmente observados durante ataques de ransomware, permitindo análise e resposta em ambiente controlado.
